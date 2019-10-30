@@ -18,18 +18,25 @@ class Robot(object):
     def launch(self):
         # Test only ATM
         self.set_to_seek_position()
-        self.seek_player(15)
+        while 42:
+            self.seek_player(15)
+            if not self.face_target:
+                print("Could not find a player")
+                self.robot.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
+            else:
+                self.robot.say_text("Let's play a game!").wait_for_completed()
+                break
 
     def seek_player(self, timeout):
         start_time = time.time()
-        face = None
-        while ((time.time() - start_time) < timeout) and not face:
-                self.robot.turn_in_place(degrees(36))
-                face = self.find_face_in_fov(2)  # Check for faces during 2 secs
-        if face and face.is_visible:
-            robot.turn_towards_face(face).wait_for_completed()
-            self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
-            self.face_target = face
+        while ((time.time() - start_time) < timeout) and not self.face_target:
+            tmp = self.robot.turn_in_place(degrees(36))
+            self.face_target = self.find_face_in_fov(2)  # Check for faces during 2 secs
+            tmp.wait_for_completed()
+            if self.face_target and self.face_target.is_visible:
+                self.robot.turn_towards_face(self.face_target).wait_for_completed()
+                self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
+                break
 
     def find_face_in_fov(self, timeout=30):
         face = None
