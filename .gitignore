@@ -1,1 +1,5 @@
 .idea
+cozmo_sdk_examples_1.4.10
+__pycache__
+tmp.py
+*.sh
