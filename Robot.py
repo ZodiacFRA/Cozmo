@@ -18,14 +18,14 @@ class Robot(object):
         self.player = None
         self.cube = None
         self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, detect_cube],
-            "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, approach_cube],
-            "raise_forklift": [co_types.CustomType02, co_markers.Triangles3, raise_forklift],
-            "lower_forklift": [co_types.CustomType03, co_markers.Triangles4, lower_forklift],
-            "turn_left": [co_types.CustomType04, co_markers.Circles2, turn_left],
-            "turn_right": [co_types.CustomType05, co_markers.Circles3, turn_right],
-            "move_forward": [co_types.CustomType06, co_markers.Diamonds4, move_forward],
-            "move_backward": [co_types.CustomType07, co_markers.Diamonds3, move_backward],
+            "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, self.detect_cube],
+            "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, self.approach_cube],
+            "raise_forklift": [co_types.CustomType02, co_markers.Triangles3, self.raise_forklift],
+            "lower_forklift": [co_types.CustomType03, co_markers.Triangles4, self.lower_forklift],
+            "turn_left": [co_types.CustomType04, co_markers.Circles2, self.turn_left],
+            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.turn_right],
+            "move_forward": [co_types.CustomType06, co_markers.Diamonds4, self.move_forward],
+            "move_backward": [co_types.CustomType07, co_markers.Diamonds3, self.move_backward],
             "EOT": [co_types.CustomType08, co_markers.Triangles2, None]
         }
 
