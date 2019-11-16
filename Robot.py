@@ -38,6 +38,19 @@ class Robot(object):
                 pass
             time.sleep(1)
 
+    def setup_game(self):
+        """Wait for the player to show the instructions and
+        store them till the player shows the EOT marker"""
+        self.add_markers_detection()
+        # Find a player
+        set_to_seek_position()
+        while not self.seek_player(30):
+            self.robot.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
+        # Get all instructions until EOT marker
+        while self.instructions[-1] != "EOT":
+            time.sleep(0.2)
+        print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
+
     def execute_instructions(self):
         for instruction in self.instructions:
             if self.actions_library[2]:

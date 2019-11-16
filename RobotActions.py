@@ -1,3 +1,18 @@
+def seek_player(self, timeout):
+    look_around = self.robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+    try:
+        self.player = self.robot.world.wait_for_observed_face(timeout)
+    except asyncio.TimeoutError:
+        pass
+    finally:  # whether we find it or not, we want to stop the behavior
+        look_around.stop()
+
+    if self.player and self.player.is_visible:
+        robot.turn_towards_face(self.player).wait_for_completed()
+        self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
+    else:
+        print("Player not found")
+
 def detect_cube(self):
     look_around = self.robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
     try:

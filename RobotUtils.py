@@ -3,21 +3,6 @@ def convert_obj_type_to_name(self, event_type):
         if prop[0] == event_type:
             return action
 
-def seek_player(self, timeout):
-    look_around = self.robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-    try:
-        self.player = self.robot.world.wait_for_observed_face(timeout)
-    except asyncio.TimeoutError:
-        pass
-    finally:  # whether we find it or not, we want to stop the behavior
-        look_around.stop()
-
-    if self.player and self.player.is_visible:
-        robot.turn_towards_face(self.player).wait_for_completed()
-        self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
-    else:
-        print("Player not found")
-
 def __del__(self):
     """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
     time.sleep(2)
@@ -26,6 +11,25 @@ def set_to_seek_position(self):
     """Move lift down, tilt head up"""
     self.robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE / 2).wait_for_completed()
     self.robot.set_lift_height(0, in_parallel=True).wait_for_completed()
+
+def handle_object_appeared(self, evt, **kw):
+    if isinstance(evt.obj, cozmo.objects.CustomObject):
+        action_name = self.convert_obj_type_to_name(evt.obj.object_type)
+        print(f"{action_name} appears")
+        if self.instructions[-1] != action_name:
+            self.instructions.append(action_name)
+
+def handle_object_disappeared(self, evt, **kw):
+    if isinstance(evt.obj, cozmo.objects.CustomObject):
+        print(f"{str(evt.obj.object_type)} disappear")
+
+def add_markers_detection(self):
+    self.r.add_event_handler(cozmo.objects.EvtObjectAppeared, self.handle_object_appeared)
+    self.r.add_event_handler(cozmo.objects.EvtObjectDisappeared, self.handle_object_disappeared)
+    for action, marker_prop in ACTIONS.items():
+        if not self.r.world.define_custom_wall(marker_prop[0], marker_prop[1],
+                                                297, 210, MARKERS_SIZE, True):
+            print(f"Marker {action} definition failed!")
 
 
 def play_with_human():
