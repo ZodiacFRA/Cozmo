@@ -2,7 +2,6 @@ import asyncio
 import time
 
 import cozmo
-from cozmo.objects import CustomObject
 from cozmo.objects import CustomObjectMarkers as co_markers
 from cozmo.objects import CustomObjectTypes as co_types
 
@@ -48,20 +47,20 @@ class Robot(object):
         store them till the player shows the EOT marker"""
         self.add_markers_detection()
         while not self.seek_player():  # Wait for player detection
-            time.sleep(2)
+            self.robot.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
         while self.instructions[-1] != "EOT":  # Wait for end marker
             time.sleep(0.2)
         print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
 
     def handle_object_appeared(self, evt, **kw):
-        if isinstance(evt.obj, CustomObject):
+        if isinstance(evt.obj, cozmo.objects.CustomObject):
             action_name = self.convert_obj_type_to_name(evt.obj.object_type)
             print(f"{action_name} appears")
             if self.instructions[-1] != action_name:
                 self.instructions.append(action_name)
 
     def handle_object_disappeared(self, evt, **kw):
-        if isinstance(evt.obj, CustomObject):
+        if isinstance(evt.obj, cozmo.objects.CustomObject):
             print(f"{str(evt.obj.object_type)} disappear")
 
     def add_markers_detection(self):
