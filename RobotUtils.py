@@ -3,14 +3,10 @@ def convert_obj_type_to_name(self, event_type):
         if prop[0] == event_type:
             return action
 
-def seek(self, timeout, search_function, found_animation):
-    """Move lift down, tilt head up, then turn around to find something"""
-    self.robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE / 2).wait_for_completed()
-    self.robot.set_lift_height(0, in_parallel=True).wait_for_completed()
+def seek_player(self, timeout):
     look_around = self.robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-
     try:
-        self.player = search_function(timeout)
+        self.player = self.robot.world.wait_for_observed_face(timeout)
     except asyncio.TimeoutError:
         pass
     finally:  # whether we find it or not, we want to stop the behavior
@@ -18,13 +14,18 @@ def seek(self, timeout, search_function, found_animation):
 
     if self.player and self.player.is_visible:
         robot.turn_towards_face(self.player).wait_for_completed()
-        self.robot.play_anim_trigger(found_animation).wait_for_completed()
+        self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
     else:
-        print("Not found")
+        print("Player not found")
 
 def __del__(self):
     """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
     time.sleep(2)
+
+def set_to_seek_position(self):
+    """Move lift down, tilt head up"""
+    self.robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE / 2).wait_for_completed()
+    self.robot.set_lift_height(0, in_parallel=True).wait_for_completed()
 
 
 def play_with_human():

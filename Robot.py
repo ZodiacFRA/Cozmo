@@ -16,6 +16,7 @@ class Robot(object):
         self.instructions = []
         self.markers_size = 180  # mm
         self.player = None
+        self.cube = None
         self.actions_library = {
             "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, detect_cube],
             "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, approach_cube],

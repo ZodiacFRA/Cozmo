@@ -2,9 +2,12 @@ def setup_game(self):
     """Wait for the player to show the instructions and
     store them till the player shows the EOT marker"""
     self.add_markers_detection()
-    while not self.seek(30, self.robot.world.wait_for_observed_face, cozmo.anim.Triggers.AcknowledgeFaceNamed):
+    # Find a player
+    set_to_seek_position()
+    while not self.seek_player(30):
         self.robot.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
-    while self.instructions[-1] != "EOT":  # Wait for end marker
+    # Get all instructions until EOT marker
+    while self.instructions[-1] != "EOT":
         time.sleep(0.2)
     print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
 

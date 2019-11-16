@@ -1,8 +1,17 @@
 def detect_cube(self):
-    print("Cube detection not implemented yet!")
+    look_around = self.robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+    try:
+        self.cube = robot.world.wait_for_observed_light_cube(timeout=30)
+    except asyncio.TimeoutError:
+        print("Cube not found")
+    finally:  # whether we find it or not, we want to stop the behavior
+        look_around.stop()
 
 def approach_cube(self):
-    print("Cube approach implemented yet!")
+    if not self.cube:
+        print("Cozmo does not remeber any cube!")
+    else:
+        self.robot.go_to_object(self.cube, distance_mm(70.0)).wait_for_completed()
 
 def raise_forklift(self):
     self.robot.move_lift(3).wait_for_completed()
