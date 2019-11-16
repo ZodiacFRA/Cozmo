@@ -5,7 +5,7 @@ import cozmo
 from cozmo.objects import CustomObject, CustomObjectMarkers, CustomObjectTypes
 
 
-class r(object):
+class Robot(object):
     def __init__(self, robot):
         self.r = robot
         self.cards = []
