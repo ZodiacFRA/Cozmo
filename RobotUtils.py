@@ -28,7 +28,7 @@ def add_markers_detection(self):
     self.r.add_event_handler(cozmo.objects.EvtObjectDisappeared, self.handle_object_disappeared)
     for action, marker_prop in ACTIONS.items():
         if not self.r.world.define_custom_wall(marker_prop[0], marker_prop[1],
-                                                297, 210, MARKERS_SIZE, True):
+                                                297, 210, self.markers_size, True):
             print(f"Marker {action} definition failed!")
 
 
