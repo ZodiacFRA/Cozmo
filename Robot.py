@@ -4,6 +4,8 @@ import time
 import cozmo
 from cozmo.objects import CustomObject, CustomObjectMarkers, CustomObjectTypes
 
+from config import MARKERS_SIZE, ACTIONS
+
 
 class Robot(object):
     def __init__(self, robot):
@@ -31,7 +33,6 @@ class Robot(object):
             if not self.r.world.define_custom_wall(CustomObjectTypes.CustomType00,
                                     CustomObjectMarkers.Circles3, 297, 210, MARKERS_SIZE, True):
                 print(f"Marker {action} definition failed!")
-
 
     def launch(self):
         print("Press CTRL-C to quit")
