@@ -6,14 +6,12 @@ from cozmo.objects import CustomObject
 from cozmo.objects import CustomObjectMarkers as co_markers
 from cozmo.objects import CustomObjectTypes as co_types
 
-from config import MARKERS_SIZE, ACTIONS
-
 
 class Robot(object):
     def __init__(self, robot):
         self.r = robot
         self.instructions = []
-        self.markers_size = 180
+        self.markers_size = 180  # mm
         self.actions_library = {
             "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.detect_cube],
             "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.approach_cube],
