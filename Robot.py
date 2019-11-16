@@ -17,15 +17,15 @@ class Robot(object):
         self.markers_size = 180  # mm
         self.player = None
         self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Circles3, detect_cube],
-            "approach_cube": [co_types.CustomType01, co_markers.Circles3, approach_cube],
-            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, raise_forklift],
-            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, lower_forklift],
-            "turn_left": [co_types.CustomType04, co_markers.Circles3, turn_left],
+            "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, detect_cube],
+            "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, approach_cube],
+            "raise_forklift": [co_types.CustomType02, co_markers.Triangles3, raise_forklift],
+            "lower_forklift": [co_types.CustomType03, co_markers.Triangles4, lower_forklift],
+            "turn_left": [co_types.CustomType04, co_markers.Circles2, turn_left],
             "turn_right": [co_types.CustomType05, co_markers.Circles3, turn_right],
-            "move_forward": [co_types.CustomType06, co_markers.Circles3, move_forward],
-            "move_backward": [co_types.CustomType07, co_markers.Circles3, move_backward],
-            "EOT": [co_types.CustomType08, co_markers.Circles3, None]
+            "move_forward": [co_types.CustomType06, co_markers.Diamonds4, move_forward],
+            "move_backward": [co_types.CustomType07, co_markers.Diamonds3, move_backward],
+            "EOT": [co_types.CustomType08, co_markers.Triangles2, None]
         }
 
     def launch(self):
