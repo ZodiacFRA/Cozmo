@@ -15,14 +15,14 @@ class Robot(object):
         self.instructions = []
         self.markers_size = 180
         self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.do_action()],
-            "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.do_action()],
-            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, self.do_action()],
-            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, self.do_action()],
-            "turn_left": [co_types.CustomType04, co_markers.Circles3, self.do_action()],
-            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.do_action()],
-            "move_forward": [co_types.CustomType06, co_markers.Circles3, self.do_action()],
-            "move_backward": [co_types.CustomType07, co_markers.Circles3, self.do_action()],
+            "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.do_action],
+            "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.do_action],
+            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, self.do_action],
+            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, self.do_action],
+            "turn_left": [co_types.CustomType04, co_markers.Circles3, self.do_action],
+            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.do_action],
+            "move_forward": [co_types.CustomType06, co_markers.Circles3, self.do_action],
+            "move_backward": [co_types.CustomType07, co_markers.Circles3, self.do_action],
             "EOT": [co_types.CustomType08, co_markers.Circles3, None]
         }
 
@@ -44,9 +44,13 @@ class Robot(object):
             sleep(0.2)
         print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
 
-    def execute_instructions():
+    def execute_instructions(self):
         for instruction in self.instructions:
-            pass
+            if self.actions_library[2]:
+                self.actions_library[2]()
+
+    def do_action(self):
+        print("Not implemented yet!")
 
     def handle_object_appeared(self, evt, **kw):
         if isinstance(evt.obj, CustomObject):
