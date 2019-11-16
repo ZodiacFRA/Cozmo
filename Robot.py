@@ -15,14 +15,14 @@ class Robot(object):
         self.instructions = []
         self.markers_size = 180
         self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.do_action],
-            "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.do_action],
-            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, self.do_action],
-            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, self.do_action],
-            "turn_left": [co_types.CustomType04, co_markers.Circles3, self.do_action],
-            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.do_action],
-            "move_forward": [co_types.CustomType06, co_markers.Circles3, self.do_action],
-            "move_backward": [co_types.CustomType07, co_markers.Circles3, self.do_action],
+            "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.detect_cube],
+            "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.approach_cube],
+            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, self.raise_forklift],
+            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, self.lower_forklift],
+            "turn_left": [co_types.CustomType04, co_markers.Circles3, self.turn_left],
+            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.turn_right],
+            "move_forward": [co_types.CustomType06, co_markers.Circles3, self.move_forward],
+            "move_backward": [co_types.CustomType07, co_markers.Circles3, self.move_backward],
             "EOT": [co_types.CustomType08, co_markers.Circles3, None]
         }
 
@@ -35,6 +35,35 @@ class Robot(object):
                 pass
             time.sleep(1)
 
+    def execute_instructions(self):
+        for instruction in self.instructions:
+            if self.actions_library[2]:
+                self.actions_library[2]()
+
+    def detect_cube(self):
+        print("Cube detection not implemented yet!")
+
+    def approach_cube(self):
+        print("Cube approach implemented yet!")
+
+    def raise_forklift(self):
+        self.robot.move_lift(3).wait_for_completed()
+
+    def lower_forklift(self):
+        self.robot.move_lift(-3).wait_for_completed()
+
+    def turn_left(self):
+        self.robot.turn_in_place(degrees(90)).wait_for_completed()
+
+    def turn_right(self):
+        self.robot.turn_in_place(degrees(-90)).wait_for_completed()
+
+    def move_forward(self):
+        self.robot.drive_straight(distance_mm(100), speed_mmps(100)).wait_for_completed()
+
+    def move_backward(self):
+        self.robot.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
+
     def setup_game(self):
         """Wait for the player to show the instructions and
         store them till the player shows the EOT marker"""
@@ -43,14 +72,6 @@ class Robot(object):
             # Wait for detection
             sleep(0.2)
         print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
-
-    def execute_instructions(self):
-        for instruction in self.instructions:
-            if self.actions_library[2]:
-                self.actions_library[2]()
-
-    def do_action(self):
-        print("Not implemented yet!")
 
     def handle_object_appeared(self, evt, **kw):
         if isinstance(evt.obj, CustomObject):
