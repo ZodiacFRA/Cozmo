@@ -97,6 +97,9 @@ class Robot(object):
             if prop[0] == event_type:
                 return action
 
+    def speak(self, msg="I don't know what to say"):
+        self.robot.say_text(msg).wait_for_completed()
+
     def __del__(self):
         """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
         time.sleep(2)
