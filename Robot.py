@@ -6,27 +6,32 @@ from cozmo.objects import CustomObject
 from cozmo.objects import CustomObjectMarkers as co_markers
 from cozmo.objects import CustomObjectTypes as co_types
 
+from utils import play_with_human
+from actions import detect_cube, approach_cube, raise_forklift, lower_forklift, turn_left, turn_right, \
+                    move_forward, move_backward
+
 
 class Robot(object):
     def __init__(self, robot):
         self.r = robot
         self.instructions = []
         self.markers_size = 180  # mm
+        self.player = None
         self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Circles3, self.detect_cube],
-            "approach_cube": [co_types.CustomType01, co_markers.Circles3, self.approach_cube],
-            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, self.raise_forklift],
-            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, self.lower_forklift],
-            "turn_left": [co_types.CustomType04, co_markers.Circles3, self.turn_left],
-            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.turn_right],
-            "move_forward": [co_types.CustomType06, co_markers.Circles3, self.move_forward],
-            "move_backward": [co_types.CustomType07, co_markers.Circles3, self.move_backward],
+            "detect_cube": [co_types.CustomType00, co_markers.Circles3, detect_cube],
+            "approach_cube": [co_types.CustomType01, co_markers.Circles3, approach_cube],
+            "raise_forklift": [co_types.CustomType02, co_markers.Circles3, raise_forklift],
+            "lower_forklift": [co_types.CustomType03, co_markers.Circles3, lower_forklift],
+            "turn_left": [co_types.CustomType04, co_markers.Circles3, turn_left],
+            "turn_right": [co_types.CustomType05, co_markers.Circles3, turn_right],
+            "move_forward": [co_types.CustomType06, co_markers.Circles3, move_forward],
+            "move_backward": [co_types.CustomType07, co_markers.Circles3, move_backward],
             "EOT": [co_types.CustomType08, co_markers.Circles3, None]
         }
 
     def launch(self):
         while True:
-            if self.play_with_human():
+            if play_with_human():
                 self.setup_game()
                 self.execute_instructions()
             else: # Autonomous gameplay
@@ -36,39 +41,16 @@ class Robot(object):
     def execute_instructions(self):
         for instruction in self.instructions:
             if self.actions_library[2]:
-                self.actions_library[2]()
-
-    def detect_cube(self):
-        print("Cube detection not implemented yet!")
-
-    def approach_cube(self):
-        print("Cube approach implemented yet!")
-
-    def raise_forklift(self):
-        self.robot.move_lift(3).wait_for_completed()
-
-    def lower_forklift(self):
-        self.robot.move_lift(-3).wait_for_completed()
-
-    def turn_left(self):
-        self.robot.turn_in_place(degrees(90)).wait_for_completed()
-
-    def turn_right(self):
-        self.robot.turn_in_place(degrees(-90)).wait_for_completed()
-
-    def move_forward(self):
-        self.robot.drive_straight(distance_mm(100), speed_mmps(100)).wait_for_completed()
-
-    def move_backward(self):
-        self.robot.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
+                self.actions_library[2](self.robot)
 
     def setup_game(self):
         """Wait for the player to show the instructions and
         store them till the player shows the EOT marker"""
         self.add_markers_detection()
-        while self.instructions[-1] != "EOT":
-            # Wait for detection
-            sleep(0.2)
+        while not self.seek_player():  # Wait for player detection
+            time.sleep(2)
+        while self.instructions[-1] != "EOT":  # Wait for end marker
+            time.sleep(0.2)
         print(f"All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo")
 
     def handle_object_appeared(self, evt, **kw):
@@ -95,8 +77,23 @@ class Robot(object):
             if prop[0] == event_type:
                 return action
 
-    def speak(self, msg="I don't know what to say"):
-        self.robot.say_text(msg).wait_for_completed()
+    def seek_player(self, timeout):
+        """Move lift down, tilt head up, then turn around to find a face"""
+        self.robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE / 2).wait_for_completed()
+        self.robot.set_lift_height(0, in_parallel=True).wait_for_completed()
+        start_time, face = time.time(), None
+        while not face and ((time.time() - start_time) < timeout):
+                self.robot.turn_in_place(degrees(36))
+                try:
+                    face = self.robot.world.wait_for_observed_face(2)
+                except asyncio.TimeoutError:
+                    pass
+        if face and face.is_visible:
+            robot.turn_towards_face(face).wait_for_completed()
+            self.robot.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
+            self.player = face
+        else:
+            print("No player found")
 
     def __del__(self):
         """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
