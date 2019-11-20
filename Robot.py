@@ -5,6 +5,7 @@ import cozmo
 from cozmo.util import degrees, distance_mm, speed_mmps
 from cozmo.objects import CustomObjectMarkers as co_markers
 from cozmo.objects import CustomObjectTypes as co_types
+from cozmo.objects import LightCube1Id, LightCube2Id, LightCube3Id
 
 from utils import *
 
@@ -16,6 +17,7 @@ class Robot(object):
         self.markers_size = 180  # mm
         self.player = None
         self.cube = None
+        self.behavior = None
         self.actions_library = {
             "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, self.detect_cube],
             "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, self.approach_cube],
@@ -33,7 +35,19 @@ class Robot(object):
             self.setup_game()
             self.execute_instructions()
         else: # Autonomous gameplay
-            pass
+            self.stack_cubes()
+
+    def stack_cubes(self):
+        if self.behavior:
+            print(f"{C_RED}Overriding existing behavior!{C_RESET}")
+            self.behavior.stop()
+        cubes = self.r.world.wait_until_observe_num_objects(num=2, object_type=cozmo.objects.LightCube, timeout=60)
+        self.behavior = self.r.start_behavior(cozmo.behavior.BehaviorTypes.StackBlocks)
+        self.behavior.stop()
+        self.behavior = None
+
+        self.r.pickup_object(cubes[0], num_retries=2).wait_for_completed()
+        self.r.place_on_object(cubes[1], num_retries=2).wait_for_completed()
 
     def setup_game(self):
         """Wait for the player to show the instructions and
@@ -56,13 +70,17 @@ class Robot(object):
             self.actions_library[instruction][2]()
 
     def seek_player(self, timeout):
-        look_around = self.r.start_behavior(cozmo.behavior.BehaviorTypes.FindFaces)
+        if self.behavior:
+            print(f"{C_RED}Overriding existing behavior!{C_RESET}")
+            self.behavior.stop()
+        self.behavior = self.r.start_behavior(cozmo.behavior.BehaviorTypes.FindFaces)
         try:
             self.player = self.r.world.wait_for_observed_face(timeout)
         except asyncio.TimeoutError:
             pass
         finally:  # whether we find it or not, we want to stop the behavior
-            look_around.stop()
+            self.behavior.stop()
+            self.behavior = None
 
         if self.player and self.player.is_visible:
             self.r.turn_towards_face(self.player).wait_for_completed()
@@ -72,13 +90,17 @@ class Robot(object):
             print(f"{C_RED}Player not found{C_RESET}")
 
     def detect_cube(self):
-        look_around = self.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+        if self.behavior:
+            print(f"{C_RED}Overriding existing behavior!{C_RESET}")
+            self.behavior.stop()
+        self.behavior = self.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
         try:
             self.cube = self.r.world.wait_for_observed_light_cube(timeout=30)
         except asyncio.TimeoutError:
             print(f"{C_RED}Cube not found{C_RESET}")
         finally:  # whether we find it or not, we want to stop the behavior
-            look_around.stop()
+            self.behavior.stop()
+            self.behavior = None
 
     def approach_cube(self):
         if not self.cube:
@@ -139,4 +161,6 @@ class Robot(object):
 
     def __del__(self):
         """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
+        if self.behavior:
+            self.behavior.stop()
         time.sleep(2)
