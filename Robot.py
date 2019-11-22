@@ -1,6 +1,7 @@
 import asyncio
 import time
 import random
+import os
 
 import cozmo
 from cozmo.util import degrees, distance_mm, speed_mmps
@@ -14,6 +15,7 @@ from utils import *
 class Robot(object):
     def __init__(s, robot, player_name):
         s.r = robot
+        s.talkative = True
         s.pickup_flag = False
         s.actions_library = {
             "pickup_cube": [None, None, s.pickup_cube],
@@ -31,8 +33,8 @@ class Robot(object):
             "remove_last_instruction": [co_types.CustomType08, co_markers.Hexagons5, None],
             "EOT": [co_types.CustomType11, co_markers.Triangles2, None],
 
-            "do_interactive_game": [co_types.CustomType09, co_markers.Hexagons4, None],  # Needs marker
-            "do_autonomous_game": [co_types.CustomType10, co_markers.Triangles5, None]
+            "do_interactive_game": [co_types.CustomType09, co_markers.Circles4, None],  # Needs marker
+            "do_autonomous_game": [co_types.CustomType10, co_markers.Diamonds2, None]
         }
         # Game data
         s.game_type = None
@@ -87,12 +89,19 @@ class Robot(object):
                 s.anim_won()
                 s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
                 s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
-                s.speak("I did it!")
+                if s.game_type == HUMAN:
+                    s.speak("We did it!")
+                else:
+                    s.speak("I did it!")
             else:
                 s.anim_lost()
                 s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
                 s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
-                s.speak("I failed!")
+                if s.game_type == HUMAN:
+                    s.speak("We failed!")
+                else:
+                    s.speak("I failed!")
+
 
             # Log all game data and reset it
             s.write_game_log(flag)
@@ -175,13 +184,14 @@ class Robot(object):
     # Utils
     def write_game_log(s, outcome):
         f = None
-        if os.path.exists("./Cozmo_games_data.tsv")
+        if os.path.exists("./Cozmo_games_data.tsv"):
             f = open("./Cozmo_games_data.tsv", 'a', encoding="utf-8")
         else:
             f = open("./Cozmo_games_data.tsv", 'w', encoding="utf-8")
             f.write("Player name\tGame type\tPositions\tOutcome\tExecution time\tInstructions\n")
-        positions = [','.join(record) for record in s.game_log["Positions"]]
-        f.write(f"{s.player_name}\t{s.game_type}\t{';'.join(s.game_log["Positions"])}\t{outcome}\t{s.game_log["Execution end time"] - s.game_log["Execution start time"]}\t{';'.join(s.instructions}")
+        positions = [f"{record[0]},{record[1]},{record[2]}" for record in s.game_log["Positions"]]
+        f.write(f"""{s.player_name}\t{s.game_type}\t{';'.join(positions)}\t{outcome}\t{s.game_log["Execution end time"] - s.game_log["Execution start time"]}\t{';'.join(s.instructions)}
+        """)
         f.close()
 
     def record_pos(s, event):
@@ -216,11 +226,11 @@ class Robot(object):
         for instruction in s.instructions:
             if s.actions_library[instruction][2]:
                 color_print(f"Executing {instruction}", C_BLUE)
-                flag = s.actions_library[instruction][2]()
+                action = s.actions_library[instruction][2]()
                 s.record_pos(instruction)
-                if flag == 2:
-                    print("return 2")
-                    return 2
+                if hasattr(action, "has_failed") and action.has_failed:
+                    return False
+        return True
 
     def handle_object_appeared(s, evt, **kw):
         """callback for marker detected"""
@@ -290,7 +300,10 @@ class Robot(object):
         s.r.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
 
     def speak(s, msg="I'm COZMO'"):
-        s.r.say_text(msg).wait_for_completed()
+        if s.talkative:
+            s.r.say_text(msg).wait_for_completed()
+        else:
+            color_print(msg, C_BLUE)
 
     def anim_won(s):
         s.r.play_anim_trigger(cozmo.anim.Triggers.BuildPyramidThankUser).wait_for_completed()
