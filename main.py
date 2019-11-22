@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-
 from Robot import Robot
 import cozmo
 
+from utils import play_with_human
+
 
 def main(robot: cozmo.robot.Robot):
-    robot = Robot(robot)
+    robot = Robot(robot, input("Player name: "))
+    robot.add_markers_detection()
     robot.launch()
 
 

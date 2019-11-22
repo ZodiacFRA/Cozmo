@@ -12,226 +12,268 @@ from utils import *
 
 
 class Robot(object):
-    def __init__(self, robot):
-        self.r = robot
-        self.last_instruction_add_time = time.time()
-        self.instructions = []
-        self.markers_size = 40  # mm
-        self.player = None
-        self.cube = None
-        self.behavior = None
-        self.game_nbr = 0
-        self.restart_game_flag = False
-        self.start_pos = self.r.pose
-        self.actions_library = {
-            "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, self.detect_cube],
-            "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, self.approach_cube],
-            "raise_forklift": [co_types.CustomType02, co_markers.Triangles3, self.raise_forklift],
-            "lower_forklift": [co_types.CustomType03, co_markers.Triangles4, self.lower_forklift],
-            "turn_left": [co_types.CustomType04, co_markers.Circles2, self.turn_left],
-            "turn_right": [co_types.CustomType05, co_markers.Circles3, self.turn_right],
-            "move_forward": [co_types.CustomType06, co_markers.Diamonds4, self.move_forward],
-            "move_backward": [co_types.CustomType07, co_markers.Diamonds3, self.move_backward],
+    def __init__(s, robot, player_name):
+        s.r = robot
+        s.pickup_flag = False
+        s.actions_library = {
+            "pickup_cube": [None, None, s.pickup_cube],
+            "place_on_object": [None, None, s.place_on_object],
+
+            "detect_cube": [co_types.CustomType00, co_markers.Hexagons2, s.detect_cube],
+            "approach_cube": [co_types.CustomType01, co_markers.Hexagons3, s.approach_cube],
+            "raise_forklift": [co_types.CustomType02, co_markers.Triangles3, s.raise_forklift],
+            "lower_forklift": [co_types.CustomType03, co_markers.Triangles4, s.lower_forklift],
+            "turn_left": [co_types.CustomType04, co_markers.Circles2, s.turn_left],
+            "turn_right": [co_types.CustomType05, co_markers.Circles3, s.turn_right],
+            "move_forward": [co_types.CustomType06, co_markers.Diamonds4, s.move_forward],
+            "move_backward": [co_types.CustomType07, co_markers.Diamonds3, s.move_backward],
+
             "remove_last_instruction": [co_types.CustomType08, co_markers.Hexagons5, None],
-            "restart_game": [co_types.CustomType09, co_markers.Triangles5, None],
-            "EOT": [co_types.CustomType10, co_markers.Triangles2, None]
+            "EOT": [co_types.CustomType11, co_markers.Triangles2, None],
+
+            "do_interactive_game": [co_types.CustomType09, co_markers.Hexagons4, None],  # Needs marker
+            "do_autonomous_game": [co_types.CustomType10, co_markers.Triangles5, None]
         }
-        self.acks = [
-                "Yes!",
-                "Aye aye captain!"
-        ]
-        # Game sucess: BuildPyramidSuccess, BuildPyramidThankUser
-        # Game fail: FistBumpLeftHanging
+        # Game data
+        s.game_type = None
+        s.instructions = []
+        s.player = None
+        s.cubes = None
+        s.game_log = {"Player name": player_name, "Positions": []}
 
-    def launch(self):
-        play_with_human_flag = play_with_human()
+    def launch(s):
         while 42:
-            self.restart_game_flag = False
-            if not self.game_nbr:
-                self.add_markers_detection()
-            if play_with_human_flag:
-                self.setup_game()
-                self.execute_instructions()
-            else: # Autonomous gameplay
-                self.stack_cubes()
-            self.r.go_to_pose(self.start_pos).wait_for_completed()
-            self.game_nbr += 1
+            s.instructions.clear()
+            s.record_pos("Game Start")
+            s.seek_player()  # Will loop until a player is found
+            # Game type handling
             tmp_time = time.time()
-            self.set_to_seek_face_position()
-            self.speak("Do you want to play again?")
-            while not "restart_game" in self.instructions and time.time() - tmp_time < 15:
-                pass
-            if not "restart_game" in self.instructions:
-                self.r.play_anim_trigger(cozmo.anim.Triggers.FistBumpLeftHanging).wait_for_completed()
+            s.speak("Do you want to play with me? Or do I do it on my own?")
+            while time.time() - tmp_time < 30:
+                if "do_autonomous_game" in s.instructions:
+                    s.anim_lost()
+                    s.game_log["Game Type"] = "Autonomous"
+                    s.game_type = ROBOT
+                    s.speak("Ok, I will do it on my own")
+                    break
+                elif "do_interactive_game" in s.instructions:
+                    s.anim_won()
+                    s.game_log["Game Type"] = "Interactive"
+                    s.game_type = HUMAN
+                    break
+            else:  # No instructions, quit
+                s.speak("Good bye!")
                 return
+
+            s.instructions.clear()
+
+            flag = False
+            if s.game_type == HUMAN:
+                s.get_instructions()
+                flag = s.execute_instructions()
+            else: # Autonomous gameplay
+                flag = s.stack_cubes()
+
+            if flag:
+                s.anim_won()
+                s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
+                s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
+                s.speak("I did it!")
             else:
-                print("detected")
-                self.r.play_anim_trigger(cozmo.anim.Triggers.MeetCozmoFirstEnrollmentCelebration).wait_for_completed()
+                s.anim_lost()
+                s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
+                s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
+                s.speak("I failed!")
 
+            # Log all game data and reset it
+            s.player = None
 
-    def stack_cubes(self):
-        lookaround = self.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-        cubes = self.r.world.wait_until_observe_num_objects(num=2, object_type=cozmo.objects.LightCube, timeout=60)
-        lookaround.stop()
-
-        if len(cubes) < 2:
-            print("Error: need 2 Cubes but only found", len(cubes), "Cube(s)")
+    ######################################
+    # Complex Actions
+    def approach_cube(s):
+        """For player game, in this case"""
+        if not s.cubes:
+            color_print("Cozmo does not remember any cube!", C_RED)
         else:
+            s.r.go_to_object(s.cubes[0], distance_mm(50.0)).wait_for_completed()
+
+    def detect_cube(s, wanted_cube_nbr=1):
+        lookaround = s.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+        # time.sleep(5)
+        s.cubes = s.r.world.wait_until_observe_num_objects(num=wanted_cube_nbr, object_type=cozmo.objects.LightCube, timeout=60)
+        lookaround.stop()
+        if len(s.cubes) < wanted_cube_nbr:
+            return color_print(f"Error: need {wanted_cube_nbr} Cubes but only found: {len(s.cubes)} Cube(s)", C_RED)
+        return True
+
+    def pickup_cube(s, cube_obj=None, num_retries=3):
+        print("pickup cube", s.cubes)
+        if not cube_obj:
+            cube_obj = s.cubes[0]
+        action = s.r.pickup_object(cube_obj, num_retries=num_retries)
+        action.wait_for_completed()
+        return action
+
+    def place_on_object(s, cube_obj=None, num_retries=3):
+        print("pickup cube", s.cubes)
+        if not cube_obj:
+            cube_obj = s.cubes[0]
+        action = s.r.place_on_object(cube_obj, num_retries=num_retries)
+        action.wait_for_completed()
+        return action
+
+    def stack_cubes(s):
+        """For autonomous game"""
+        if s.detect_cube(2):
             # Try and pickup the 1st cube
-            current_action = self.r.pickup_object(cubes[0], num_retries=3)
-            current_action.wait_for_completed()
-            if current_action.has_failed:
-                code, reason = current_action.failure_reason
-                result = current_action.result
-                print("Pickup Cube failed: code=%s reason='%s' result=%s" % (code, reason, result))
-                return
+            action = s.pickup_cube(s.cubes[0], num_retries=3)
+            if action.has_failed:
+                code, reason = action.failure_reason
+                if action.result == cozmo.action.ActionResults.BAD_OBJECT:
+                    s.stack_cubes()
+                if action.result == cozmo.action.ActionResults.CANCELLED_WHILE_RUNNING:
+                    s.speak("I can't see enough cubes")
+                return color_print(f"Pickup Cube failed! code: {code}\nreason: {reason}\nresult: {action.result}", C_RED)
 
             # Now try to place that cube on the 2nd one
-            current_action = self.r.place_on_object(cubes[1], num_retries=3)
-            current_action.wait_for_completed()
-            if current_action.has_failed:
-                code, reason = current_action.failure_reason
-                result = current_action.result
-                print("Place On Cube failed: code=%s reason='%s' result=%s" % (code, reason, result))
+            action = s.place_on_object(s.cubes[1], num_retries=3)
+            if action.has_failed:
+                code, reason = action.failure_reason
+                return color_print(f"Place on Cube failed! code: {code}\nreason: {reason}\nresult: {action.result}", C_RED)
+        return True
+
+    def seek_player(s):
+        while 42:
+            lookaround = s.r.start_behavior(cozmo.behavior.BehaviorTypes.FindFaces)
+            color_print("Looking for a player", C_YELLOW)
+            try:
+                s.player = s.r.world.wait_for_observed_face(timeout=30)
+            except:  # Yeah not cool, but.. Cozmo SDK? Can't handle timeouts in there.
+                pass
+            lookaround.stop()
+
+            if s.player and s.player.is_visible:
+                color_print("Player found", C_GREEN)
+                s.r.turn_towards_face(s.player).wait_for_completed()
+                s.r.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
+                s.record_pos("Player found")
                 return
+            else:
+                color_print("Player not found after 30 seconds, retrying...", C_RED)
+            s.r.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
 
-    def setup_game(self):
+    ######################################
+    # Utils
+    def record_pos(s, event):
+        """Logs the time, event (string) and pose of the robot when called"""
+        s.game_log["Positions"].append((time.time(), event, s.r.pose))
+
+    def get_instructions(s):
         """Wait for the player to show the instructions and
-        store them till the player shows the EOT marker"""
-        # Find a player
-        self.set_to_seek_face_position()
-        while not self.seek_player(30):
-            self.r.play_anim_trigger(cozmo.anim.Triggers.NothingToDoBoredIdle).wait_for_completed()
-            time.sleep(1)
-        print(f"{C_GREEN}Player found, waiting for instructions{C_RESET}")
-        # Get all instructions until EOT marker
-        self.instructions.clear()
-        while not len(self.instructions) or self.instructions[-1] != "EOT":
-            time.sleep(0.2)
-        self.instructions.pop()
-        print(f"{C_GREEN}All {len(self.instructions)} instructions have been stored and will now be executed by Cozmo{C_RESET}")
+        store them, returns when the player shows the EOT marker"""
+        s.speak("You can give me the instructions now!")
+        while not len(s.instructions) or s.instructions[-1] != "EOT":
+            s.speak(' ')
+        s.speak("Let's go!")
+        color_print(f"All {len(s.instructions)} instructions have been stored and will now be executed by Cozmo", C_GREEN)
+        s.instructions.pop()
+        for i in range(len(s.instructions) - 1):
+            if s.instructions[i] == "approach_cube" and s.instructions[i + 1] == "raise_forklift":  # Check forklift?
+                s.pickup_flag = True
+                s.instructions.pop(i)
+                s.instructions.pop(i)
+                s.instructions.insert(i, "pickup_cube")
+        if s.pickup_flag:
+            for i in range(len(s.instructions) - 1):
+                if s.instructions[i] == "approach_cube" and s.instructions[i + 1] == "lower_forklift":  # Check forklift?
+                    s.instructions.pop(i)
+                    s.instructions.pop(i)
+                    s.instructions.insert(i, "place_on_object")
+        s.game_log["Instructions"] = s.instructions
 
-    def execute_instructions(self):
-        for instruction in self.instructions:
-            print(f"{C_BLUE}Executing {instruction}{C_RESET}")
-            self.actions_library[instruction][2]()
+    def execute_instructions(s):
+        """Execute all stored instructions (from detected markers)"""
+        for instruction in s.instructions:
+            if s.actions_library[instruction][2]:
+                color_print(f"Executing {instruction}", C_BLUE)
+                flag = s.actions_library[instruction][2]()
+                s.record_pos(instruction)
+                if flag == 2:
+                    print("return 2")
+                    return 2
 
-    def seek_player(self, timeout):
-        if self.behavior:
-            print(f"{C_RED}Overriding existing behavior!{C_RESET}")
-            self.behavior.stop()
-        self.behavior = self.r.start_behavior(cozmo.behavior.BehaviorTypes.FindFaces)
-        try:
-            self.player = self.r.world.wait_for_observed_face(timeout)
-        except asyncio.TimeoutError:
-            pass
-        finally:  # whether we find it or not, we want to stop the behavior
-            self.behavior.stop()
-            self.behavior = None
+    def handle_object_appeared(s, evt, **kw):
+        """callback for marker detected"""
+        if isinstance(evt.obj, cozmo.objects.CustomObject):
+            action_name = s.convert_obj_type_to_name(evt.obj.object_type)
+            # color_print(f" + {action_name.replace('_', ' ').title()}", C_GREEN)
+            if action_name == "remove_last_instruction" and len(s.instructions):
+                removed = s.instructions.pop()
+                color_print(f" - {removed.replace('_', ' ').title()}", C_RED)
+            else:
+                s.instructions.append(action_name)
+            color_print(f"{s.instructions}", C_BLUE)
+            s.blink(2)
 
-        if self.player and self.player.is_visible:
-            self.r.turn_towards_face(self.player).wait_for_completed()
-            self.r.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
-            return True
-        else:
-            print(f"{C_RED}Player not found{C_RESET}")
+    def handle_object_disappeared(s, evt, **kw):
+        return
 
-    def detect_cube(self):
-        if self.behavior:
-            print(f"{C_RED}Overriding existing behavior!{C_RESET}")
-            self.behavior.stop()
-        self.behavior = self.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-        try:
-            self.cube = self.r.world.wait_for_observed_light_cube(timeout=30)
-        except asyncio.TimeoutError:
-            print(f"{C_RED}Cube not found{C_RESET}")
-        finally:  # whether we find it or not, we want to stop the behavior
-            self.behavior.stop()
-            self.behavior = None
+    def add_markers_detection(s):
+        """Setup the callback function for marker detection, also defines the markers sizes"""
+        s.r.add_event_handler(cozmo.objects.EvtObjectAppeared, s.handle_object_appeared)
+        s.r.add_event_handler(cozmo.objects.EvtObjectDisappeared, s.handle_object_disappeared)
+        for action, d in s.actions_library.items():
+            if d[0]:
+                if not s.r.world.define_custom_cube(d[0], d[1], 50, MARKERS_SIZE, MARKERS_SIZE, True):
+                    color_print(f"Marker {action} definition failed!", C_RED)
 
-    def approach_cube(self):
-        if not self.cube:
-            print(f"{C_RED}Cozmo does not remeber any cube!{C_RESET}")
-        else:
-            self.r.go_to_object(self.cube, distance_mm(40.0)).wait_for_completed()
+    def __del__(s):
+        """Wait for tasks completion before exiting (needed by the Cozmo SDK to properly exit)"""
+        time.sleep(2)
 
-    def raise_forklift(self):
-        self.r.move_lift(3)
-
-    def lower_forklift(self):
-        self.r.move_lift(-3)
-
-    def turn_left(self):
-        self.r.turn_in_place(degrees(90)).wait_for_completed()
-
-    def turn_right(self):
-        self.r.turn_in_place(degrees(-90)).wait_for_completed()
-
-    def move_forward(self):
-        self.r.drive_straight(distance_mm(100), speed_mmps(100)).wait_for_completed()
-
-    def move_backward(self):
-        self.r.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
-
-    def speak(self, msg="I'm COZMO'"):
-        self.r.say_text(msg).wait_for_completed()
-
-    def convert_obj_type_to_name(self, event_type):
-        for action, prop in self.actions_library.items():
+    def convert_obj_type_to_name(s, event_type):
+        """Used to get the action name from the Cozmo SDK event type"""
+        for action, prop in s.actions_library.items():
             if prop[0] == event_type:
                 return action
 
-    def set_to_seek_face_position(self):
-        """Move lift down, tilt head up"""
-        self.r.set_lift_height(0, in_parallel=True).wait_for_completed()
-        self.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
-
-    def set_to_seek_cube_position(self):
-        """Move lift down, tilt head up"""
-        self.r.set_lift_height(0, in_parallel=True).wait_for_completed()
-        self.r.set_head_angle(degrees(0)).wait_for_completed()
-
-    def blink(self, blinks):
+    ######################################
+    # Simple Actions
+    def blink(s, blinks):
+        """Makes Cozmo's backpack lights blink"""
         blink_speed = 0.05
         for i in range(blinks):
             if i:
                 time.sleep(blink_speed)
-            self.r.set_all_backpack_lights(cozmo.lights.green_light)
+            s.r.set_all_backpack_lights(cozmo.lights.green_light)
             time.sleep(blink_speed)
-            self.r.set_all_backpack_lights(cozmo.lights.blue_light)
+            s.r.set_all_backpack_lights(cozmo.lights.blue_light)
             time.sleep(blink_speed)
-            self.r.set_all_backpack_lights(cozmo.lights.off_light)
+            s.r.set_all_backpack_lights(cozmo.lights.off_light)
 
-    def handle_object_appeared(self, evt, **kw):
-        if isinstance(evt.obj, cozmo.objects.CustomObject):
-            action_name = self.convert_obj_type_to_name(evt.obj.object_type)
-            print(f"{C_BLUE}{action_name} appears{C_RESET}")
-            if time.time() - self.last_instruction_add_time > 3:
-                print(f"{C_GREEN} + {action_name.replace('_', ' ').title()}{C_RESET}")
-                if action_name == "remove_last_instruction" and len(self.instructions):
-                    removed = self.instructions.pop()
-                    print(f"{C_RED} - {removed.replace('_', ' ').title()}{C_RESET}")
-                else:
-                    self.instructions.append(action_name)
-                print(f"\r{self.instructions}{C_RESET}", end='')
-                self.blink(1)
-                self.last_instruction_add_time = time.time()
+    def raise_forklift(s):
+        s.r.move_lift(3)
 
-    def handle_object_disappeared(self, evt, **kw):
-        return
-        # if isinstance(evt.obj, cozmo.objects.CustomObject):
-            # print(f"{C_BLUE}{self.convert_obj_type_to_name(evt.obj.object_type)} disappear{C_RESET}")
+    def lower_forklift(s):
+        s.r.move_lift(-3)
 
-    def add_markers_detection(self):
-        self.r.add_event_handler(cozmo.objects.EvtObjectAppeared, self.handle_object_appeared)
-        self.r.add_event_handler(cozmo.objects.EvtObjectDisappeared, self.handle_object_disappeared)
-        for action, marker_prop in self.actions_library.items():
-            if not self.r.world.define_custom_cube(marker_prop[0], marker_prop[1],
-                                                    50, self.markers_size, self.markers_size, True):
-                print(f"{C_RED}Marker {action} definition failed!{C_RESET}")
+    def turn_left(s):
+        s.r.turn_in_place(degrees(90)).wait_for_completed()
 
-    def __del__(self):
-        """Wait for tasks completion before exiting (needed by the Cozmo SDK)"""
-        if self.behavior:
-            self.behavior.stop()
-        time.sleep(2)
+    def turn_right(s):
+        s.r.turn_in_place(degrees(-90)).wait_for_completed()
+
+    def move_forward(s):
+        s.r.drive_straight(distance_mm(100), speed_mmps(100)).wait_for_completed()
+
+    def move_backward(s):
+        s.r.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
+
+    def speak(s, msg="I'm COZMO'"):
+        s.r.say_text(msg).wait_for_completed()
+
+    def anim_won(s):
+        s.r.play_anim_trigger(cozmo.anim.Triggers.BuildPyramidThankUser).wait_for_completed()
+
+    def anim_lost(s):
+        s.r.play_anim_trigger(cozmo.anim.Triggers.FistBumpLeftHanging).wait_for_completed()
