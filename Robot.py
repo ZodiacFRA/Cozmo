@@ -38,12 +38,17 @@ class Robot(object):
         s.game_type = None
         s.instructions = []
         s.player = None
+        s.player_name = player_name
         s.cubes = None
-        s.game_log = {"Player name": player_name, "Positions": []}
+        s.game_log = {"Positions": []}
 
     def launch(s):
         while 42:
             s.instructions.clear()
+            s.game_type = None
+            s.player = None
+            s.cubes = None
+            s.game_log = {"Positions": []}
             s.record_pos("Game Start")
             s.seek_player()  # Will loop until a player is found
             # Game type handling
@@ -70,9 +75,13 @@ class Robot(object):
             flag = False
             if s.game_type == HUMAN:
                 s.get_instructions()
+                s.game_log["Execution start time"] = time.time()
                 flag = s.execute_instructions()
+                s.game_log["Execution end time"] = time.time()
             else: # Autonomous gameplay
+                s.game_log["Execution start time"] = time.time()
                 flag = s.stack_cubes()
+                s.game_log["Execution end time"] = time.time()
 
             if flag:
                 s.anim_won()
@@ -86,7 +95,7 @@ class Robot(object):
                 s.speak("I failed!")
 
             # Log all game data and reset it
-            s.player = None
+            s.write_game_log(flag)
 
     ######################################
     # Complex Actions
@@ -164,6 +173,17 @@ class Robot(object):
 
     ######################################
     # Utils
+    def write_game_log(s, outcome):
+        f = None
+        if os.path.exists("./Cozmo_games_data.tsv")
+            f = open("./Cozmo_games_data.tsv", 'a', encoding="utf-8")
+        else:
+            f = open("./Cozmo_games_data.tsv", 'w', encoding="utf-8")
+            f.write("Player name\tGame type\tPositions\tOutcome\tExecution time\tInstructions\n")
+        positions = [','.join(record) for record in s.game_log["Positions"]]
+        f.write(f"{s.player_name}\t{s.game_type}\t{';'.join(s.game_log["Positions"])}\t{outcome}\t{s.game_log["Execution end time"] - s.game_log["Execution start time"]}\t{';'.join(s.instructions}")
+        f.close()
+
     def record_pos(s, event):
         """Logs the time, event (string) and pose of the robot when called"""
         s.game_log["Positions"].append((time.time(), event, s.r.pose))
