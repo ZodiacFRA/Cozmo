@@ -6,8 +6,7 @@ from utils import play_with_human
 
 
 def main(robot: cozmo.robot.Robot):
-    robot = Robot(robot, input("Player name: "))
-    robot.add_markers_detection()
+    robot = Robot(robot)
     robot.launch()
 
 

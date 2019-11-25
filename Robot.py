@@ -2,18 +2,21 @@ import asyncio
 import time
 import random
 import os
+import math
 
 import cozmo
 from cozmo.util import degrees, distance_mm, speed_mmps
 from cozmo.objects import CustomObjectMarkers as co_markers
 from cozmo.objects import CustomObjectTypes as co_types
 from cozmo.objects import LightCube1Id, LightCube2Id, LightCube3Id
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 from utils import *
 
 
 class Robot(object):
-    def __init__(s, robot, player_name):
+    def __init__(s, robot):
         s.r = robot
         s.talkative = True
         s.pickup_flag = False
@@ -36,16 +39,22 @@ class Robot(object):
             "do_interactive_game": [co_types.CustomType09, co_markers.Circles4, None],  # Needs marker
             "do_autonomous_game": [co_types.CustomType10, co_markers.Diamonds2, None]
         }
+        s.add_markers_detection()
         # Game data
         s.game_type = None
         s.instructions = []
         s.player = None
-        s.player_name = player_name
+        s.player_name = input("Player name: ")
         s.cubes = None
         s.game_log = {"Positions": []}
 
+        s.last_pose = None
+        s.fig = None
+
+
     def launch(s):
         while 42:
+            s.init_plot()
             s.instructions.clear()
             s.game_type = None
             s.player = None
@@ -53,13 +62,14 @@ class Robot(object):
             s.game_log = {"Positions": []}
             s.record_pos("Game Start")
             s.seek_player()  # Will loop until a player is found
+            s.plot_pose()
             # Game type handling
             tmp_time = time.time()
             if "do_autonomous_game" not in s.instructions and "do_interactive_game" not in s.instructions:
                 s.speak("Do you want to play with me? Or do I do it on my own?")
             while time.time() - tmp_time < 30:
                 if "do_autonomous_game" in s.instructions:
-                    s.anim_lost()
+                    s.r.play_anim_trigger(cozmo.anim.Triggers.CubePounceGetUnready).wait_for_completed()
                     s.game_log["Game Type"] = "Autonomous"
                     s.game_type = ROBOT
                     s.speak("Ok, I will do it on my own")
@@ -88,7 +98,9 @@ class Robot(object):
 
             if flag:
                 s.anim_won()
-                s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
+                action = s.r.go_to_pose(s.game_log["Positions"][1][2])
+                while action.is_running:
+                    s.plot_pose()
                 s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
                 if s.game_type == HUMAN:
                     s.speak("We did it!")
@@ -96,7 +108,9 @@ class Robot(object):
                     s.speak("I did it!")
             else:
                 s.anim_lost()
-                s.r.go_to_pose(s.game_log["Positions"][1][2]).wait_for_completed()  # Go to Player
+                action = s.r.go_to_pose(s.game_log["Positions"][1][2])
+                while action.is_running:
+                    s.plot_pose()
                 s.r.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
                 if s.game_type == HUMAN:
                     s.speak("We failed!")
@@ -106,6 +120,8 @@ class Robot(object):
 
             # Log all game data and reset it
             s.write_game_log(flag)
+            plt.savefig(f"./images/{s.player_name}_{time.time()}.png", bbox_inches='tight')
+            plt.close(s.fig)
 
     ######################################
     # Complex Actions
@@ -114,7 +130,9 @@ class Robot(object):
         if not s.cubes:
             color_print("Cozmo does not remember any cube!", C_RED)
         else:
-            s.r.go_to_object(s.cubes[0], distance_mm(50.0)).wait_for_completed()
+            gotoCube = s.r.go_to_object(s.cubes[0], distance_mm(50.0))
+            while gotoCube.is_running:
+                s.plot_pose()
 
     def detect_cube(s, wanted_cube_nbr=1):
         lookaround = s.r.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
@@ -123,6 +141,11 @@ class Robot(object):
         lookaround.stop()
         if len(s.cubes) < wanted_cube_nbr:
             return color_print(f"Error: need {wanted_cube_nbr} Cubes but only found: {len(s.cubes)} Cube(s)", C_RED)
+        else:
+            for cube in s.cubes:
+                plt.plot([cube.pose.position.x],[cube.pose.position.y],'rs', label='Cubes')
+                s.fig.canvas.draw()
+
         return True
 
     def pickup_cube(s, cube_obj=None, num_retries=4):
@@ -131,16 +154,18 @@ class Robot(object):
         if not cube_obj:
             cube_obj = s.cubes[0]
         action = s.r.pickup_object(cube_obj, num_retries=num_retries)
-        action.wait_for_completed()
+        while action.is_running:
+            s.plot_pose()
         return action
 
     def place_on_object(s, cube_obj=None, num_retries=3):
         s.r.stop_all_motors()
-        print("pickup cube", s.cubes)
         if not cube_obj:
+            print("pickup cube", s.cubes)
             cube_obj = s.cubes[0]
         action = s.r.place_on_object(cube_obj, num_retries=num_retries)
-        action.wait_for_completed()
+        while action.is_running:
+            s.plot_pose()
         return action
 
     def stack_cubes(s):
@@ -151,7 +176,7 @@ class Robot(object):
             if action.has_failed:
                 code, reason = action.failure_reason
                 if action.result == cozmo.action.ActionResults.BAD_OBJECT:
-                    s.stack_cubes()
+                    pass
                 if action.result == cozmo.action.ActionResults.CANCELLED_WHILE_RUNNING:
                     s.speak("I can't see enough cubes")
                 return color_print(f"Pickup Cube failed! code: {code}\nreason: {reason}\nresult: {action.result}", C_RED)
@@ -180,6 +205,9 @@ class Robot(object):
                 s.r.turn_towards_face(s.player).wait_for_completed()
                 s.r.play_anim_trigger(cozmo.anim.Triggers.AcknowledgeFaceNamed).wait_for_completed()
                 s.record_pos("Player found")
+                plt.plot([s.player.pose.position.x],[s.player.pose.position.y],'k*', label='Player')
+                plt.autoscale(enable=True,axis='both',tight=None)
+                s.fig.canvas.draw()
                 return
             else:
                 color_print("Player not found after 30 seconds, retrying...", C_RED)
@@ -201,13 +229,38 @@ class Robot(object):
     def record_pos(s, event):
         """Logs the time, event (string) and pose of the robot when called"""
         s.game_log["Positions"].append((time.time(), event, s.r.pose))
+        print("Pos reg: ",s.r.pose.position.x,";",s.r.pose.position.y)
+
+    def init_plot(s):
+        s.fig = plt.gcf()
+        plt.xlabel('X position')
+        plt.ylabel('Y position')
+        plt.title('Map Evolution')
+
+        cubes = mpatches.Patch(color='red', label='cubes')
+        Face = mpatches.Patch(color='black', label='Face')
+        Bob_Path = mpatches.Patch(color='cyan', label='Bob Path')
+        Bob_Position = mpatches.Patch(color='blue', label='Bob Position')
+        plt.legend(handles=[cubes, Face, Bob_Path, Bob_Position])
+
+        s.fig.show()
+        s.fig.canvas.draw()
+        plt.autoscale(enable=True,axis='both',tight=None)
+
+    def plot_pose(s):
+        if s.last_pose is not None:
+            plt.plot([s.last_pose.position.x],[s.last_pose.position.y],'c.', label='Bob Path')
+        s.last_pose = s.r.pose
+        plt.plot([s.last_pose.position.x],[s.last_pose.position.y],'b.', label='Bob Position')
+        plt.autoscale(enable=True,axis='both',tight=None)
+        s.fig.canvas.draw()
 
     def get_instructions(s):
         """Wait for the player to show the instructions and
         store them, returns when the player shows the EOT marker"""
         s.speak("You can give me the instructions now!")
         while not len(s.instructions) or s.instructions[-1] != "EOT":
-            s.speak(' ')
+            pass
         s.speak("Let's go!")
         color_print(f"All {len(s.instructions)} instructions have been stored and will now be executed by Cozmo", C_GREEN)
         s.instructions.pop()
@@ -254,6 +307,7 @@ class Robot(object):
                 color_print(f" - {removed.replace('_', ' ').title()}", C_RED)
             else:
                 s.instructions.append(action_name)
+                # s.speak(action_name.replace('_', ' '))
             color_print(f"{s.instructions}", C_BLUE)
             s.blink(2)
 
@@ -300,16 +354,24 @@ class Robot(object):
         s.r.move_lift(-3)
 
     def turn_left(s):
-        s.r.turn_in_place(degrees(90)).wait_for_completed()
+        action = s.r.turn_in_place(degrees(90))
+        while action.is_running:
+            s.plot_pose()
 
     def turn_right(s):
-        s.r.turn_in_place(degrees(-90)).wait_for_completed()
+        action = s.r.turn_in_place(degrees(-90))
+        while action.is_running:
+            s.plot_pose()
 
     def move_forward(s):
-        s.r.drive_straight(distance_mm(100), speed_mmps(100)).wait_for_completed()
+        action = s.r.drive_straight(distance_mm(100), speed_mmps(100))
+        while action.is_running:
+            s.plot_pose()
 
     def move_backward(s):
-        s.r.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
+        action = s.r.drive_straight(distance_mm(-100), speed_mmps(100))
+        while action.is_running:
+            s.plot_pose()
 
     def speak(s, msg="I'm COZMO"):
         if s.talkative:
