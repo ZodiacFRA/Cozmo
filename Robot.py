@@ -55,7 +55,8 @@ class Robot(object):
             s.seek_player()  # Will loop until a player is found
             # Game type handling
             tmp_time = time.time()
-            s.speak("Do you want to play with me? Or do I do it on my own?")
+            if "do_autonomous_game" not in s.instructions and "do_interactive_game" not in s.instructions:
+                s.speak("Do you want to play with me? Or do I do it on my own?")
             while time.time() - tmp_time < 30:
                 if "do_autonomous_game" in s.instructions:
                     s.anim_lost()
@@ -124,7 +125,7 @@ class Robot(object):
             return color_print(f"Error: need {wanted_cube_nbr} Cubes but only found: {len(s.cubes)} Cube(s)", C_RED)
         return True
 
-    def pickup_cube(s, cube_obj=None, num_retries=3):
+    def pickup_cube(s, cube_obj=None, num_retries=4):
         s.r.stop_all_motors()
         print("pickup cube", s.cubes)
         if not cube_obj:
@@ -194,8 +195,7 @@ class Robot(object):
             f = open("./Cozmo_games_data.tsv", 'w', encoding="utf-8")
             f.write("Player name\tGame type\tPositions\tOutcome\tExecution time\tInstructions\n")
         positions = [f"{record[0]},{record[1]},{record[2]}" for record in s.game_log["Positions"]]
-        f.write(f"""{s.player_name}\t{s.game_type}\t{';'.join(positions)}\t{outcome}\t{s.game_log["Execution end time"] - s.game_log["Execution start time"]}\t{';'.join(s.instructions)}
-        """)
+        f.write(f"""{s.player_name}\t{s.game_type}\t{';'.join(positions)}\t{outcome}\t{s.game_log["Execution end time"] - s.game_log["Execution start time"]}\t{';'.join(s.instructions)}\n""")
         f.close()
 
     def record_pos(s, event):
@@ -211,6 +211,11 @@ class Robot(object):
         s.speak("Let's go!")
         color_print(f"All {len(s.instructions)} instructions have been stored and will now be executed by Cozmo", C_GREEN)
         s.instructions.pop()
+        # "Easy mode" implementation, to prevent cozmo failing the game even if the player did everything properly
+        for i in range(len(s.instructions)):
+            if s.instructions[i] == "approach_cube":
+                if i == 0 or s.instructions[i - 1] != "detect_cube":
+                    s.instructions.insert(i, "detect_cube")
         for i in range(len(s.instructions) - 1):
             if s.instructions[i] == "approach_cube" and s.instructions[i + 1] == "raise_forklift":  # Check forklift?
                 s.pickup_flag = True
@@ -223,19 +228,21 @@ class Robot(object):
                     s.instructions.pop(i)
                     s.instructions.pop(i)
                     s.instructions.insert(i, "place_on_object")
+
+
         s.game_log["Instructions"] = s.instructions
 
     def execute_instructions(s):
         """Execute all stored instructions (from detected markers)"""
-        flag = False
+        flag = 0
         for instruction in s.instructions:
             if s.actions_library[instruction][2]:
                 color_print(f"Executing {instruction}", C_BLUE)
                 action = s.actions_library[instruction][2]()
                 s.record_pos(instruction)
-                if hasattr(action, "has_failed") and not action.has_failed and s.pickup_flag:
-                    flag = True
-        return flag
+                if hasattr(action, "has_failed") and not action.has_failed:
+                    flag += 1
+        return flag == 2
 
     def handle_object_appeared(s, evt, **kw):
         """callback for marker detected"""
@@ -304,7 +311,7 @@ class Robot(object):
     def move_backward(s):
         s.r.drive_straight(distance_mm(-100), speed_mmps(100)).wait_for_completed()
 
-    def speak(s, msg="I'm COZMO'"):
+    def speak(s, msg="I'm COZMO"):
         if s.talkative:
             s.r.say_text(msg).wait_for_completed()
         else:
