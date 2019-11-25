@@ -125,6 +125,7 @@ class Robot(object):
         return True
 
     def pickup_cube(s, cube_obj=None, num_retries=3):
+        s.r.stop_all_motors()
         print("pickup cube", s.cubes)
         if not cube_obj:
             cube_obj = s.cubes[0]
@@ -133,6 +134,7 @@ class Robot(object):
         return action
 
     def place_on_object(s, cube_obj=None, num_retries=3):
+        s.r.stop_all_motors()
         print("pickup cube", s.cubes)
         if not cube_obj:
             cube_obj = s.cubes[0]
@@ -157,6 +159,8 @@ class Robot(object):
             action = s.place_on_object(s.cubes[1], num_retries=3)
             if action.has_failed:
                 code, reason = action.failure_reason
+                if action.result == cozmo.action.ActionResults.BAD_OBJECT:
+                    s.stack_cubes()
                 return color_print(f"Place on Cube failed! code: {code}\nreason: {reason}\nresult: {action.result}", C_RED)
         return True
 
@@ -223,14 +227,15 @@ class Robot(object):
 
     def execute_instructions(s):
         """Execute all stored instructions (from detected markers)"""
+        flag = False
         for instruction in s.instructions:
             if s.actions_library[instruction][2]:
                 color_print(f"Executing {instruction}", C_BLUE)
                 action = s.actions_library[instruction][2]()
                 s.record_pos(instruction)
-                if hasattr(action, "has_failed") and action.has_failed:
-                    return False
-        return True
+                if hasattr(action, "has_failed") and not action.has_failed and s.pickup_flag:
+                    flag = True
+        return flag
 
     def handle_object_appeared(s, evt, **kw):
         """callback for marker detected"""
