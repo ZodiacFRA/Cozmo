@@ -6,6 +6,7 @@ C_RESET = "\x1b[0m"
 
 MARKERS_SIZE = 40
 
+DISCOVERY = 2
 HUMAN = 1
 ROBOT = 0
 

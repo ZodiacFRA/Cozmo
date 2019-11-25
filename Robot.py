@@ -36,8 +36,9 @@ class Robot(object):
             "remove_last_instruction": [co_types.CustomType08, co_markers.Hexagons5, None],
             "EOT": [co_types.CustomType11, co_markers.Triangles2, None],
 
-            "do_interactive_game": [co_types.CustomType09, co_markers.Circles4, None],  # Needs marker
-            "do_autonomous_game": [co_types.CustomType10, co_markers.Diamonds2, None]
+            "do_interactive_game": [co_types.CustomType09, co_markers.Circles4, None],
+            "do_autonomous_game": [co_types.CustomType10, co_markers.Diamonds2, None],
+            "do_map_discovery": [co_types.CustomType12, co_markers.Triangles5, None]
         }
         s.add_markers_detection()
         # Game data
@@ -65,7 +66,7 @@ class Robot(object):
             s.plot_pose()
             # Game type handling
             tmp_time = time.time()
-            if "do_autonomous_game" not in s.instructions and "do_interactive_game" not in s.instructions:
+            if "do_autonomous_game" not in s.instructions and "do_interactive_game" not in s.instructions and "do_map_discovery" not in s.instructions:
                 s.speak("Do you want to play with me? Or do I do it on my own?")
             while time.time() - tmp_time < 30:
                 if "do_autonomous_game" in s.instructions:
@@ -79,6 +80,10 @@ class Robot(object):
                     s.game_log["Game Type"] = "Interactive"
                     s.game_type = HUMAN
                     break
+                elif "do_map_discovery" in s.instructions:
+                    s.game_log["Game Type"] = "Discovery"
+                    s.game_type = DISCOVERY
+                    break
             else:  # No instructions, quit
                 s.speak("Good bye!")
                 return
@@ -91,9 +96,13 @@ class Robot(object):
                 s.game_log["Execution start time"] = time.time()
                 flag = s.execute_instructions()
                 s.game_log["Execution end time"] = time.time()
-            else: # Autonomous gameplay
+            elif s.game_type == ROBOT: # Autonomous gameplay
                 s.game_log["Execution start time"] = time.time()
                 flag = s.stack_cubes()
+                s.game_log["Execution end time"] = time.time()
+            elif s.game_type == DISCOVERY:
+                s.game_log["Execution start time"] = time.time()
+                flag = s.detect_cube(3)
                 s.game_log["Execution end time"] = time.time()
 
             if flag:
