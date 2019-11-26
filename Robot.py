@@ -40,6 +40,14 @@ class Robot(object):
             "do_autonomous_game": [co_types.CustomType10, co_markers.Diamonds2, None],
             "do_map_discovery": [co_types.CustomType12, co_markers.Triangles5, None]
         }
+        s.lose_animations = [
+            cozmo.anim.Triggers.CubePounceGetUnready,
+            cozmo.anim.Triggers.PeekABooGetOutSad,
+            cozmo.anim.Triggers.CodeLabLose,
+            cozmo.anim.Triggers.CubePounceLoseHand,
+            cozmo.anim.Triggers.CubePounceLoseSession,
+            cozmo.anim.Triggers.MemoryMatchCozmoLoseHand
+        ]
         s.add_markers_detection()
         # Game data
         s.game_type = None
@@ -70,7 +78,7 @@ class Robot(object):
                 s.speak("Do you want to play with me? Or do I do it on my own?")
             while time.time() - tmp_time < 30:
                 if "do_autonomous_game" in s.instructions:
-                    s.r.play_anim_trigger(cozmo.anim.Triggers.CubePounceGetUnready).wait_for_completed()
+                    s.r.play_anim_trigger(random.choice(s.lose_animations)).wait_for_completed()
                     s.game_log["Game Type"] = "Autonomous"
                     s.game_type = ROBOT
                     s.speak("Ok, I will do it on my own")
@@ -84,6 +92,7 @@ class Robot(object):
                     s.game_log["Game Type"] = "Discovery"
                     s.game_type = DISCOVERY
                     break
+                time.sleep(0.5)
             else:  # No instructions, quit
                 s.speak("Good bye!")
                 return
@@ -238,7 +247,7 @@ class Robot(object):
     def record_pos(s, event):
         """Logs the time, event (string) and pose of the robot when called"""
         s.game_log["Positions"].append((time.time(), event, s.r.pose))
-        print("Pos reg: ",s.r.pose.position.x,";",s.r.pose.position.y)
+        # print("Pos reg: ",s.r.pose.position.x,";",s.r.pose.position.y)
 
     def init_plot(s):
         s.fig = plt.gcf()
@@ -269,7 +278,7 @@ class Robot(object):
         store them, returns when the player shows the EOT marker"""
         s.speak("You can give me the instructions now!")
         while not len(s.instructions) or s.instructions[-1] != "EOT":
-            pass
+            time.sleep(0.5)
         s.speak("Let's go!")
         color_print(f"All {len(s.instructions)} instructions have been stored and will now be executed by Cozmo", C_GREEN)
         s.instructions.pop()
