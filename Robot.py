@@ -62,8 +62,8 @@ class Robot(object):
 
 
     def launch(s):
+        s.init_plot()
         while 42:
-            s.init_plot()
             s.instructions.clear()
             s.game_type = None
             s.player = None
@@ -139,7 +139,7 @@ class Robot(object):
             # Log all game data and reset it
             s.write_game_log(flag)
             plt.savefig(f"./images/{s.player_name}_{time.time()}.png", bbox_inches='tight')
-            plt.close(s.fig)
+            plt.clf()
 
     ######################################
     # Complex Actions
